@@ -1239,13 +1239,13 @@ async function aiAutofill() {
 
     let filled = 0;
     fields.forEach(([id, val]) => {
-      if (val && !document.getElementById(id).value.trim()) {
+      if (val) {
         document.getElementById(id).value = val;
         filled++;
       }
     });
 
-    if (info.strength && !document.getElementById('c-strength').value) {
+    if (info.strength) {
       document.getElementById('c-strength').value = info.strength;
       filled++;
     }
