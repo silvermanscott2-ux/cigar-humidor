@@ -1254,7 +1254,8 @@ async function aiAutofill() {
     status.style.display = 'block';
     status.innerHTML = `<span style="color:${confidenceColor}">✦ ${info.confidence === 'high' ? 'High confidence' : info.confidence === 'medium' ? 'Medium confidence' : 'Low confidence — verify details'}</span> · ${filled} fields filled`;
 
-    showToast(filled > 0 ? `Auto-filled ${filled} fields` : 'Fields already filled — clear them to re-fill');
+    console.log('Autofill response:', JSON.stringify(info));
+    showToast(`Auto-filled ${filled} fields`);
 
   } catch (err) {
     showToast('Auto-fill failed: ' + err.message, true);
