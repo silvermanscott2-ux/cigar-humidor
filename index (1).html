@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Colección — Humidor Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Josefin+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0e0b08;
+    --surface: #1a1510;
+    --surface2: #231c14;
+    --surface3: #2e241a;
+    --gold: #c9a84c;
+    --gold-light: #e2c97e;
+    --gold-dim: #7a6330;
+    --cream: #f0e6d0;
+    --cream-dim: #a89878;
+    --red: #8b2020;
+    --red-light: #c04040;
+    --green: #2d5a3d;
+    --green-light: #4a9465;
+    --text: #e8dcc8;
+    --text-dim: #8a7a62;
+    --border: #3a2e1e;
+    --border-gold: #5a4520;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Josefin Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    letter-spacing: 0.04em;
+  }
+
+  /* Background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(139,32,32,0.06) 0%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(14,11,8,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-gold);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 300;
+    color: var(--gold);
+    letter-spacing: 0.12em;
+  }
+  .logo span { font-style: italic; color: var(--gold-light); }
+
+  nav { display: flex; gap: 0.25rem; }
+  nav button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color 0.2s, background 0.2s;
+  }
+  nav button:hover { color: var(--gold-light); background: rgba(201,168,76,0.06); }
+  nav button.active { color: var(--gold); background: rgba(201,168,76,0.1); }
+
+  /* ─── MAIN LAYOUT ─── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  /* ─── VIEWS ─── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ─── DASHBOARD ─── */
+  .dashboard-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .page-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.8rem;
+    font-weight: 300;
+    color: var(--cream);
+    line-height: 1;
+  }
+  .page-subtitle {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-top: 0.4rem;
+  }
+
+  /* Stats row */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    padding: 1.5rem;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.4rem;
+    font-weight: 300;
+    color: var(--gold);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 0.4rem;
+  }
+
+  /* Humidor cards */
+  .humidor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .humidor-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .humidor-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .humidor-card:hover { border-color: var(--gold-dim); background: var(--surface2); }
+  .humidor-card:hover::before { opacity: 1; }
+
+  .humidor-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem;
+    font-weight: 400;
+    color: var(--cream);
+    margin-bottom: 0.3rem;
+  }
+  .humidor-location {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+  }
+  .humidor-stats {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .h-stat { }
+  .h-stat-val {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    color: var(--gold-light);
+  }
+  .h-stat-lbl {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .humidor-env {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .env-badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    background: var(--surface3);
+    padding: 0.25rem 0.6rem;
+    border-radius: 1px;
+  }
+  .env-badge span { color: var(--gold-light); margin-left: 0.3rem; }
+
+  .add-humidor-card {
+    background: transparent;
+    border: 1px dashed var(--border-gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--gold-dim);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    min-height: 140px;
+  }
+  .add-humidor-card:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ─── CIGARS VIEW ─── */
+  .toolbar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .search-wrap {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+  }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    padding: 0.65rem 1rem 0.65rem 2.5rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-wrap input:focus { border-color: var(--gold-dim); }
+  .search-wrap input::placeholder { color: var(--text-dim); }
+  .search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 0.65rem 1rem;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--gold-dim); }
+  select option { background: var(--surface2); }
+
+  /* Buttons */
+  .btn {
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.4rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-gold {
+    background: var(--gold);
+    color: var(--bg);
+  }
+  .btn-gold:hover { background: var(--gold-light); }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-gold);
+    color: var(--gold-dim);
+  }
+  .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-danger {
+    background: transparent;
+    border: 1px solid #5a1515;
+    color: #c04040;
+  }
+  .btn-danger:hover { background: rgba(139,32,32,0.2); }
+  .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.62rem; }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  thead {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border-gold);
+  }
+  th {
+    padding: 0.8rem 1rem;
+    text-align: left;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+
+  .cigar-brand { font-weight: 600; color: var(--cream); }
+  .cigar-line { color: var(--text-dim); font-size: 0.7rem; font-style: italic; font-family: 'Cormorant Garamond', serif; }
+
+  .strength-badge {
+    display: inline-block;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 1px;
+  }
+  .strength-Mild { background: rgba(74,148,101,0.15); color: #4a9465; border: 1px solid rgba(74,148,101,0.3); }
+  .strength-Mild-Medium { background: rgba(120,160,80,0.15); color: #78a050; border: 1px solid rgba(120,160,80,0.3); }
+  .strength-Medium { background: rgba(201,168,76,0.12); color: #c9a84c; border: 1px solid rgba(201,168,76,0.3); }
+  .strength-Medium-Full { background: rgba(180,100,40,0.15); color: #c07040; border: 1px solid rgba(180,100,40,0.3); }
+  .strength-Full { background: rgba(139,32,32,0.15); color: #c04040; border: 1px solid rgba(139,32,32,0.3); }
+
+  .rating-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .rating-high { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid var(--gold-dim); }
+  .rating-mid { background: rgba(100,120,100,0.15); color: #7a9a7a; border: 1px solid #3a5a3a; }
+  .rating-low { background: rgba(80,80,80,0.15); color: var(--text-dim); border: 1px solid var(--border); }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border-gold);
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+  }
+  .modal-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  .modal-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--cream);
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    line-height: 1;
+    transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--gold); }
+
+  .modal-body { padding: 1.5rem 2rem; }
+  .modal-footer {
+    padding: 1rem 2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+  }
+  input[type=text], input[type=number], input[type=date], textarea, .form-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input:focus, textarea:focus, .form-select:focus { border-color: var(--gold-dim); }
+  input::placeholder, textarea::placeholder { color: var(--text-dim); }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .btn-autofill {
+    background: linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.06));
+    border: 1px solid var(--border-gold);
+    color: var(--gold);
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.7rem 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .btn-autofill:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); }
+  .btn-autofill:disabled { opacity: 0.5; cursor: not-allowed; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .autofill-loading { animation: pulse 1s ease infinite; }
+
+  .section-divider {
+    grid-column: 1 / -1;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    margin-top: 0.5rem;
+  }
+
+  /* ─── EMPTY STATE ─── */
+  .empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    color: var(--text-dim);
+  }
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+  }
+  .empty-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem;
+    color: var(--cream-dim);
+    margin-bottom: 0.5rem;
+  }
+  .empty-sub { font-size: 0.72rem; letter-spacing: 0.08em; }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border-gold);
+    border-left: 3px solid var(--gold);
+    padding: 0.8rem 1.2rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--cream);
+    z-index: 1000;
+    transform: translateX(calc(100% + 2rem));
+    transition: transform 0.3s ease;
+    max-width: 300px;
+  }
+  .toast.show { transform: translateX(0); }
+  .toast.error { border-left-color: var(--red-light); }
+
+  /* ─── LOADING ─── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 3rem;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border-gold);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .qty-display { color: var(--gold-light); font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; }
+  .price-display { color: var(--cream-dim); }
+
+  @media (max-width: 640px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full { grid-column: 1; }
+    header { padding: 0 1rem; }
+    main { padding: 1rem; }
+    nav button { padding: 0.5rem 0.6rem; }
+    .logo { font-size: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>La</span> Colección</div>
+  <nav>
+    <button class="active" onclick="showView('dashboard')">Dashboard</button>
+    <button onclick="showView('cigars')">Inventory</button>
+    <button onclick="showView('humidors')">Humidors</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ─── DASHBOARD ─── -->
+  <div class="view active" id="view-dashboard">
+    <div class="dashboard-header">
+      <div>
+        <div class="page-title">My Collection</div>
+        <div class="page-subtitle">Humidor Inventory Manager</div>
+      </div>
+    </div>
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="stat-total">—</div><div class="stat-label">Total Cigars</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-humidors">—</div><div class="stat-label">Humidors</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-value">—</div><div class="stat-label">Est. Value</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-aging">—</div><div class="stat-label">Aging / Ready Soon</div></div>
+    </div>
+    <div class="humidor-grid" id="dashboard-humidors">
+      <div class="loading"><div class="spinner"></div> Loading humidors...</div>
+    </div>
+  </div>
+
+  <!-- ─── CIGARS ─── -->
+  <div class="view" id="view-cigars">
+    <div class="dashboard-header">
+      <div>
+        <div class="page-title">Inventory</div>
+        <div class="page-subtitle">All cigars across humidors</div>
+      </div>
+      <button class="btn btn-gold" onclick="openCigarModal()">+ Add Cigar</button>
+    </div>
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="cigar-search" placeholder="Search brand, line, vitola..." oninput="filterCigars()">
+      </div>
+      <select id="filter-humidor" onchange="filterCigars()">
+        <option value="">All Humidors</option>
+      </select>
+      <select id="filter-strength" onchange="filterCigars()">
+        <option value="">All Strengths</option>
+        <option>Mild</option>
+        <option>Mild-Medium</option>
+        <option>Medium</option>
+        <option>Medium-Full</option>
+        <option>Full</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cigar</th>
+            <th>Vitola</th>
+            <th>Wrapper</th>
+            <th>Strength</th>
+            <th>Humidor</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Rating</th>
+            <th>Drink By</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="cigar-tbody">
+          <tr><td colspan="10"><div class="loading"><div class="spinner"></div> Loading...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── HUMIDORS ─── -->
+  <div class="view" id="view-humidors">
+    <div class="dashboard-header">
+      <div>
+        <div class="page-title">Humidors</div>
+        <div class="page-subtitle">Manage your cabinets</div>
+      </div>
+      <button class="btn btn-gold" onclick="openHumidorModal()">+ Add Humidor</button>
+    </div>
+    <div class="humidor-grid" id="humidor-list">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ─── CIGAR MODAL ─── -->
+<div class="modal-overlay" id="cigar-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="cigar-modal-title">Add Cigar</div>
+      <button class="modal-close" onclick="closeCigarModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="section-divider">Identification</div>
+        <div class="form-group">
+          <label>Brand *</label>
+          <input type="text" id="c-brand" placeholder="e.g. Arturo Fuente">
+        </div>
+        <div class="form-group">
+          <label>Line / Series</label>
+          <input type="text" id="c-line" placeholder="e.g. Opus X">
+        </div>
+        <div class="form-group full">
+          <button class="btn btn-autofill" onclick="aiAutofill()" id="autofill-btn">
+            <span id="autofill-icon">✦</span> AI Auto-Fill Details
+          </button>
+          <div id="autofill-status" style="display:none;font-size:0.65rem;letter-spacing:0.1em;color:var(--gold-dim);margin-top:0.4rem;"></div>
+        </div>
+        <div class="form-group">
+          <label>Vitola (Size/Shape)</label>
+          <input type="text" id="c-vitola" placeholder="e.g. Robusto, Churchill">
+        </div>
+        <div class="form-group">
+          <label>Humidor</label>
+          <select id="c-humidor" class="form-select"></select>
+        </div>
+
+        <div class="section-divider">Tobacco Profile</div>
+        <div class="form-group">
+          <label>Wrapper Origin</label>
+          <input type="text" id="c-wrapper-origin" placeholder="e.g. Ecuador, Connecticut">
+        </div>
+        <div class="form-group">
+          <label>Wrapper Type</label>
+          <input type="text" id="c-wrapper-type" placeholder="e.g. Natural, Maduro, Claro">
+        </div>
+        <div class="form-group">
+          <label>Binder Origin</label>
+          <input type="text" id="c-binder" placeholder="e.g. Nicaragua, Dominican">
+        </div>
+        <div class="form-group">
+          <label>Filler Origin</label>
+          <input type="text" id="c-filler" placeholder="e.g. Honduras, Peru">
+        </div>
+        <div class="form-group full">
+          <label>Strength</label>
+          <select id="c-strength" class="form-select">
+            <option value="">— Select Strength —</option>
+            <option>Mild</option>
+            <option>Mild-Medium</option>
+            <option>Medium</option>
+            <option>Medium-Full</option>
+            <option>Full</option>
+          </select>
+        </div>
+
+        <div class="section-divider">Inventory & Value</div>
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" id="c-qty" placeholder="1" min="0">
+        </div>
+        <div class="form-group">
+          <label>Purchase Price (per stick $)</label>
+          <input type="number" id="c-price" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label>Purchase Date</label>
+          <input type="date" id="c-purchase-date">
+        </div>
+        <div class="form-group">
+          <label>Drink-By / Aging Target</label>
+          <input type="date" id="c-drink-by">
+        </div>
+
+        <div class="section-divider">Tasting Notes</div>
+        <div class="form-group">
+          <label>Rating (0–100)</label>
+          <input type="number" id="c-rating" placeholder="e.g. 92" min="0" max="100">
+        </div>
+        <div class="form-group full">
+          <label>Tasting Notes</label>
+          <textarea id="c-notes" placeholder="Flavors, aromas, construction, overall impression..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="hidden" id="c-id">
+      <button class="btn btn-danger btn-sm" id="c-delete-btn" onclick="deleteCigar()" style="display:none;margin-right:auto">Delete</button>
+      <button class="btn btn-outline" onclick="closeCigarModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveCigar()">Save Cigar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── HUMIDOR MODAL ─── -->
+<div class="modal-overlay" id="humidor-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="humidor-modal-title">Add Humidor</div>
+      <button class="modal-close" onclick="closeHumidorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Name *</label>
+          <input type="text" id="h-name" placeholder="e.g. Main Cabinet, Travel Case">
+        </div>
+        <div class="form-group full">
+          <label>Location</label>
+          <input type="text" id="h-location" placeholder="e.g. Home Office, Lounge">
+        </div>
+        <div class="form-group">
+          <label>Capacity (sticks)</label>
+          <input type="number" id="h-capacity" placeholder="e.g. 100" min="0">
+        </div>
+        <div class="form-group">
+          <label>Temperature (°F)</label>
+          <input type="number" id="h-temp" placeholder="e.g. 70" min="50" max="90">
+        </div>
+        <div class="form-group">
+          <label>Humidity (%)</label>
+          <input type="number" id="h-humidity" placeholder="e.g. 65" min="50" max="80">
+        </div>
+        <div class="form-group full">
+          <label>Notes</label>
+          <textarea id="h-notes" placeholder="Any details about this humidor..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="hidden" id="h-id">
+      <button class="btn btn-danger btn-sm" id="h-delete-btn" onclick="deleteHumidor()" style="display:none;margin-right:auto">Delete</button>
+      <button class="btn btn-outline" onclick="closeHumidorModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveHumidor()">Save Humidor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://gaoyeszjyrpsqqrzmhmo.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_LRj6OetrDOr7sFDJ9QYx8w_62gYOvwZ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let humidors = [];
+let cigars = [];
+
+// ─── INIT ───
+async function init() {
+  await loadHumidors();
+  await loadCigars();
+  renderDashboard();
+  renderHumidorList();
+  renderCigarTable();
+}
+
+// ─── DATA ───
+async function loadHumidors() {
+  const { data, error } = await sb.from('humidors').select('*').order('created_at');
+  if (!error) humidors = data || [];
+}
+
+async function loadCigars() {
+  const { data, error } = await sb.from('cigars').select('*').order('brand');
+  if (!error) cigars = data || [];
+}
+
+// ─── VIEWS ───
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── DASHBOARD ───
+function renderDashboard() {
+  const totalQty = cigars.reduce((s, c) => s + (c.quantity || 0), 0);
+  const totalVal = cigars.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 0)), 0);
+  const now = new Date();
+  const soonDays = 90;
+  const agingSoon = cigars.filter(c => {
+    if (!c.drink_by_date) return false;
+    const diff = (new Date(c.drink_by_date) - now) / 86400000;
+    return diff >= 0 && diff <= soonDays;
+  }).length;
+
+  document.getElementById('stat-total').textContent = totalQty;
+  document.getElementById('stat-humidors').textContent = humidors.length;
+  document.getElementById('stat-value').textContent = totalVal > 0 ? '$' + totalVal.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}) : '—';
+  document.getElementById('stat-aging').textContent = agingSoon;
+
+  const grid = document.getElementById('dashboard-humidors');
+  grid.innerHTML = '';
+
+  humidors.forEach(h => {
+    const hCigars = cigars.filter(c => c.humidor_id === h.id);
+    const qty = hCigars.reduce((s, c) => s + (c.quantity || 0), 0);
+    const val = hCigars.reduce((s, c) => s + ((c.purchase_price || 0) * (c.quantity || 0)), 0);
+
+    const card = document.createElement('div');
+    card.className = 'humidor-card';
+    card.onclick = () => {
+      document.getElementById('filter-humidor').value = h.id;
+      showViewDirect('cigars');
+      filterCigars();
+    };
+    card.innerHTML = `
+      <div class="humidor-name">${esc(h.name)}</div>
+      <div class="humidor-location">${esc(h.location || 'No location set')}</div>
+      <div class="humidor-stats">
+        <div class="h-stat"><div class="h-stat-val">${qty}</div><div class="h-stat-lbl">Sticks</div></div>
+        ${h.capacity ? `<div class="h-stat"><div class="h-stat-val">${h.capacity}</div><div class="h-stat-lbl">Capacity</div></div>` : ''}
+        ${val > 0 ? `<div class="h-stat"><div class="h-stat-val">$${Math.round(val)}</div><div class="h-stat-lbl">Value</div></div>` : ''}
+      </div>
+      ${(h.temp_f || h.humidity) ? `
+      <div class="humidor-env">
+        ${h.temp_f ? `<div class="env-badge">Temp<span>${h.temp_f}°F</span></div>` : ''}
+        ${h.humidity ? `<div class="env-badge">RH<span>${h.humidity}%</span></div>` : ''}
+      </div>` : ''}
+    `;
+    grid.appendChild(card);
+  });
+
+  const addCard = document.createElement('div');
+  addCard.className = 'add-humidor-card';
+  addCard.onclick = () => openHumidorModal();
+  addCard.innerHTML = `<span style="font-size:1.2rem">+</span> Add Humidor`;
+  grid.appendChild(addCard);
+}
+
+function showViewDirect(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('nav button')[1].classList.add('active');
+}
+
+// ─── HUMIDOR LIST ───
+function renderHumidorList() {
+  const list = document.getElementById('humidor-list');
+  list.innerHTML = '';
+
+  if (humidors.length === 0) {
+    list.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🪵</div><div class="empty-title">No humidors yet</div><div class="empty-sub">Add your first humidor to get started</div></div>`;
+    return;
+  }
+
+  humidors.forEach(h => {
+    const hCigars = cigars.filter(c => c.humidor_id === h.id);
+    const qty = hCigars.reduce((s, c) => s + (c.quantity || 0), 0);
+    const card = document.createElement('div');
+    card.className = 'humidor-card';
+    card.onclick = () => openHumidorModal(h);
+    card.innerHTML = `
+      <div class="humidor-name">${esc(h.name)}</div>
+      <div class="humidor-location">${esc(h.location || 'No location set')}</div>
+      <div class="humidor-stats">
+        <div class="h-stat"><div class="h-stat-val">${qty}</div><div class="h-stat-lbl">Sticks</div></div>
+        ${h.capacity ? `<div class="h-stat"><div class="h-stat-val">${h.capacity}</div><div class="h-stat-lbl">Capacity</div></div>` : ''}
+      </div>
+      ${(h.temp_f || h.humidity) ? `<div class="humidor-env">
+        ${h.temp_f ? `<div class="env-badge">Temp<span>${h.temp_f}°F</span></div>` : ''}
+        ${h.humidity ? `<div class="env-badge">RH<span>${h.humidity}%</span></div>` : ''}
+      </div>` : ''}
+      ${h.notes ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.75rem;font-style:italic">${esc(h.notes)}</div>` : ''}
+    `;
+    list.appendChild(card);
+  });
+
+  const addCard = document.createElement('div');
+  addCard.className = 'add-humidor-card';
+  addCard.onclick = () => openHumidorModal();
+  addCard.innerHTML = `<span style="font-size:1.2rem">+</span> Add Humidor`;
+  list.appendChild(addCard);
+}
+
+// ─── CIGAR TABLE ───
+function renderCigarTable(data) {
+  const tbody = document.getElementById('cigar-tbody');
+  const rows = data !== undefined ? data : cigars;
+
+  // Update humidor filter options
+  const sel = document.getElementById('filter-humidor');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">All Humidors</option>';
+  humidors.forEach(h => {
+    sel.innerHTML += `<option value="${h.id}">${esc(h.name)}</option>`;
+  });
+  sel.value = curVal;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🚬</div><div class="empty-title">No cigars found</div><div class="empty-sub">Add your first cigar or adjust filters</div></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(c => {
+    const humidor = humidors.find(h => h.id === c.humidor_id);
+    const rating = c.rating;
+    const ratingClass = rating >= 90 ? 'rating-high' : rating >= 80 ? 'rating-mid' : 'rating-low';
+    const drinkBy = c.drink_by_date ? new Date(c.drink_by_date).toLocaleDateString('en-US', {month:'short',year:'numeric'}) : '—';
+    const wrapperDisplay = [c.wrapper_type, c.wrapper_origin].filter(Boolean).join(' / ') || '—';
+    return `
+    <tr ondblclick="openCigarModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+      <td>
+        <div class="cigar-brand">${esc(c.brand)}</div>
+        ${c.line ? `<div class="cigar-line">${esc(c.line)}</div>` : ''}
+      </td>
+      <td>${esc(c.vitola || '—')}</td>
+      <td style="font-size:0.7rem;color:var(--text-dim)">${esc(wrapperDisplay)}</td>
+      <td>${c.strength ? `<span class="strength-badge strength-${c.strength.replace(' ','-')}">${esc(c.strength)}</span>` : '—'}</td>
+      <td style="font-size:0.7rem;color:var(--text-dim)">${humidor ? esc(humidor.name) : '—'}</td>
+      <td><span class="qty-display">${c.quantity || 0}</span></td>
+      <td><span class="price-display">${c.purchase_price ? '$' + Number(c.purchase_price).toFixed(2) : '—'}</span></td>
+      <td>${rating ? `<span class="${ratingClass} rating-pill">${rating}</span>` : '—'}</td>
+      <td style="font-size:0.7rem;color:var(--text-dim)">${drinkBy}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="openCigarModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterCigars() {
+  const search = document.getElementById('cigar-search').value.toLowerCase();
+  const humidorId = document.getElementById('filter-humidor').value;
+  const strength = document.getElementById('filter-strength').value;
+
+  let filtered = cigars.filter(c => {
+    const matchSearch = !search || 
+      (c.brand || '').toLowerCase().includes(search) ||
+      (c.line || '').toLowerCase().includes(search) ||
+      (c.vitola || '').toLowerCase().includes(search) ||
+      (c.wrapper_type || '').toLowerCase().includes(search) ||
+      (c.wrapper_origin || '').toLowerCase().includes(search);
+    const matchHumidor = !humidorId || c.humidor_id === humidorId;
+    const matchStrength = !strength || c.strength === strength;
+    return matchSearch && matchHumidor && matchStrength;
+  });
+
+  renderCigarTable(filtered);
+}
+
+// ─── CIGAR MODAL ───
+function openCigarModal(cigar) {
+  const modal = document.getElementById('cigar-modal');
+  const isEdit = !!cigar;
+  document.getElementById('cigar-modal-title').textContent = isEdit ? 'Edit Cigar' : 'Add Cigar';
+  document.getElementById('c-delete-btn').style.display = isEdit ? 'inline-block' : 'none';
+
+  // Populate humidor select
+  const sel = document.getElementById('c-humidor');
+  sel.innerHTML = '<option value="">— No Humidor —</option>';
+  humidors.forEach(h => sel.innerHTML += `<option value="${h.id}">${esc(h.name)}</option>`);
+
+  const fields = {
+    'c-id': 'id', 'c-brand': 'brand', 'c-line': 'line', 'c-vitola': 'vitola',
+    'c-humidor': 'humidor_id', 'c-wrapper-origin': 'wrapper_origin',
+    'c-wrapper-type': 'wrapper_type', 'c-binder': 'binder_origin',
+    'c-filler': 'filler_origin', 'c-strength': 'strength',
+    'c-qty': 'quantity', 'c-price': 'purchase_price',
+    'c-purchase-date': 'purchase_date', 'c-drink-by': 'drink_by_date',
+    'c-rating': 'rating', 'c-notes': 'tasting_notes'
+  };
+
+  Object.entries(fields).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    el.value = (isEdit && cigar[key] != null) ? cigar[key] : '';
+  });
+
+  modal.classList.add('open');
+}
+
+function closeCigarModal() {
+  document.getElementById('cigar-modal').classList.remove('open');
+}
+
+async function saveCigar() {
+  const id = document.getElementById('c-id').value;
+  const data = {
+    brand: document.getElementById('c-brand').value.trim(),
+    line: document.getElementById('c-line').value.trim() || null,
+    vitola: document.getElementById('c-vitola').value.trim() || null,
+    humidor_id: document.getElementById('c-humidor').value || null,
+    wrapper_origin: document.getElementById('c-wrapper-origin').value.trim() || null,
+    wrapper_type: document.getElementById('c-wrapper-type').value.trim() || null,
+    binder_origin: document.getElementById('c-binder').value.trim() || null,
+    filler_origin: document.getElementById('c-filler').value.trim() || null,
+    strength: document.getElementById('c-strength').value || null,
+    quantity: parseInt(document.getElementById('c-qty').value) || 1,
+    purchase_price: parseFloat(document.getElementById('c-price').value) || null,
+    purchase_date: document.getElementById('c-purchase-date').value || null,
+    drink_by_date: document.getElementById('c-drink-by').value || null,
+    rating: parseFloat(document.getElementById('c-rating').value) || null,
+    tasting_notes: document.getElementById('c-notes').value.trim() || null,
+  };
+
+  if (!data.brand) { showToast('Brand is required', true); return; }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('cigars').update(data).eq('id', id));
+  } else {
+    ({ error } = await sb.from('cigars').insert(data));
+  }
+
+  if (error) { showToast('Error saving: ' + error.message, true); return; }
+
+  showToast(id ? 'Cigar updated' : 'Cigar added');
+  closeCigarModal();
+  await loadCigars();
+  renderDashboard();
+  filterCigars();
+}
+
+async function deleteCigar() {
+  if (!confirm('Delete this cigar?')) return;
+  const id = document.getElementById('c-id').value;
+  const { error } = await sb.from('cigars').delete().eq('id', id);
+  if (error) { showToast('Error: ' + error.message, true); return; }
+  showToast('Cigar deleted');
+  closeCigarModal();
+  await loadCigars();
+  renderDashboard();
+  filterCigars();
+}
+
+// ─── HUMIDOR MODAL ───
+function openHumidorModal(humidor) {
+  const isEdit = !!humidor;
+  document.getElementById('humidor-modal-title').textContent = isEdit ? 'Edit Humidor' : 'Add Humidor';
+  document.getElementById('h-delete-btn').style.display = isEdit ? 'inline-block' : 'none';
+
+  const fields = {
+    'h-id': 'id', 'h-name': 'name', 'h-location': 'location',
+    'h-capacity': 'capacity', 'h-temp': 'temp_f',
+    'h-humidity': 'humidity', 'h-notes': 'notes'
+  };
+
+  Object.entries(fields).forEach(([id, key]) => {
+    document.getElementById(id).value = (isEdit && humidor[key] != null) ? humidor[key] : '';
+  });
+
+  document.getElementById('humidor-modal').classList.add('open');
+}
+
+function closeHumidorModal() {
+  document.getElementById('humidor-modal').classList.remove('open');
+}
+
+async function saveHumidor() {
+  const id = document.getElementById('h-id').value;
+  const data = {
+    name: document.getElementById('h-name').value.trim(),
+    location: document.getElementById('h-location').value.trim() || null,
+    capacity: parseInt(document.getElementById('h-capacity').value) || null,
+    temp_f: parseFloat(document.getElementById('h-temp').value) || null,
+    humidity: parseFloat(document.getElementById('h-humidity').value) || null,
+    notes: document.getElementById('h-notes').value.trim() || null,
+  };
+
+  if (!data.name) { showToast('Name is required', true); return; }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('humidors').update(data).eq('id', id));
+  } else {
+    ({ error } = await sb.from('humidors').insert(data));
+  }
+
+  if (error) { showToast('Error: ' + error.message, true); return; }
+
+  showToast(id ? 'Humidor updated' : 'Humidor added');
+  closeHumidorModal();
+  await loadHumidors();
+  await loadCigars();
+  renderDashboard();
+  renderHumidorList();
+  renderCigarTable();
+}
+
+async function deleteHumidor() {
+  if (!confirm('Delete this humidor? Cigars will be unassigned.')) return;
+  const id = document.getElementById('h-id').value;
+  const { error } = await sb.from('humidors').delete().eq('id', id);
+  if (error) { showToast('Error: ' + error.message, true); return; }
+  showToast('Humidor deleted');
+  closeHumidorModal();
+  await loadHumidors();
+  await loadCigars();
+  renderDashboard();
+  renderHumidorList();
+  renderCigarTable();
+}
+
+// ─── AI AUTOFILL ───
+async function aiAutofill() {
+  const brand = document.getElementById('c-brand').value.trim();
+  const line = document.getElementById('c-line').value.trim();
+
+  if (!brand) { showToast('Enter a brand name first', true); return; }
+
+  const btn = document.getElementById('autofill-btn');
+  const icon = document.getElementById('autofill-icon');
+  const status = document.getElementById('autofill-status');
+
+  btn.disabled = true;
+  icon.textContent = '◌';
+  icon.classList.add('autofill-loading');
+  btn.childNodes[1].textContent = ' Looking up cigar...';
+  status.style.display = 'none';
+
+  try {
+    const prompt = `You are a cigar expert database. Given the cigar brand "${brand}"${line ? ` and line/series "${line}"` : ''}, return ONLY a JSON object (no markdown, no explanation) with these fields:
+{
+  "vitola": "most common vitola/size for this cigar or blank",
+  "wrapper_origin": "wrapper leaf country/region",
+  "wrapper_type": "Natural, Maduro, Colorado, Claro, Oscuro, etc",
+  "binder_origin": "binder country/region",
+  "filler_origin": "filler country or countries",
+  "strength": "one of: Mild, Mild-Medium, Medium, Medium-Full, Full",
+  "tasting_notes": "2-3 sentence description of typical flavor profile, aromas, and smoking characteristics",
+  "confidence": "high, medium, or low based on how well-known this cigar is"
+}
+If you don't recognize the cigar, still fill in any fields you can and set confidence to low. Return ONLY the JSON object.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || '';
+    
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON returned');
+    const info = JSON.parse(jsonMatch[0]);
+
+    // Fill in fields (only if currently empty or user confirms override)
+    const fields = [
+      ['c-vitola', info.vitola],
+      ['c-wrapper-origin', info.wrapper_origin],
+      ['c-wrapper-type', info.wrapper_type],
+      ['c-binder', info.binder_origin],
+      ['c-filler', info.filler_origin],
+      ['c-notes', info.tasting_notes],
+    ];
+
+    let filled = 0;
+    fields.forEach(([id, val]) => {
+      if (val && !document.getElementById(id).value.trim()) {
+        document.getElementById(id).value = val;
+        filled++;
+      }
+    });
+
+    // Strength select
+    if (info.strength && !document.getElementById('c-strength').value) {
+      document.getElementById('c-strength').value = info.strength;
+      filled++;
+    }
+
+    const confidenceColor = info.confidence === 'high' ? 'var(--green-light)' : info.confidence === 'medium' ? 'var(--gold)' : 'var(--text-dim)';
+    status.style.display = 'block';
+    status.innerHTML = `<span style="color:${confidenceColor}">✦ ${info.confidence === 'high' ? 'High confidence' : info.confidence === 'medium' ? 'Medium confidence' : 'Low confidence — verify details'}</span> · ${filled} fields filled`;
+
+    showToast(filled > 0 ? `Auto-filled ${filled} fields` : 'Fields already filled — clear them to re-fill');
+
+  } catch (err) {
+    showToast('Auto-fill failed: ' + err.message, true);
+    status.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    icon.classList.remove('autofill-loading');
+    icon.textContent = '✦';
+    btn.childNodes[1].textContent = ' AI Auto-Fill Details';
+  }
+}
+
+// ─── UTILS ───
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Close modals on overlay click
+document.getElementById('cigar-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeCigarModal(); });
+document.getElementById('humidor-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeHumidorModal(); });
+
+init();
+</script>
+</body>
+</html>
