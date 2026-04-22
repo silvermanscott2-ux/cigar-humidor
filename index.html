@@ -609,6 +609,7 @@
     <button class="active" onclick="showView('dashboard')">Dashboard</button>
     <button onclick="showView('cigars')">Inventory</button>
     <button onclick="showView('humidors')">Humidors</button>
+    <button onclick="showView('import')">Import</button>
   </nav>
 </header>
 
@@ -693,6 +694,37 @@
     </div>
     <div class="humidor-grid" id="humidor-list">
       <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+
+  <!-- ─── IMPORT ─── -->
+  <div class="view" id="view-import">
+    <div class="dashboard-header">
+      <div>
+        <div class="page-title">Import Cigars</div>
+        <div class="page-subtitle">Paste an invoice or list to bulk add cigars</div>
+      </div>
+    </div>
+    <div style="max-width:800px">
+      <div style="background:var(--surface);border:1px solid var(--border);padding:1.5rem;margin-bottom:1.5rem">
+        <div style="font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:0.75rem">Step 1 — Paste your invoice or cigar list</div>
+        <textarea id="import-raw" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.78rem;padding:0.8rem;outline:none;resize:vertical;min-height:160px;letter-spacing:0.04em" placeholder="Paste anything — invoice text, email, list of cigars, spreadsheet data..."></textarea>
+        <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center">
+          <button class="btn btn-gold" onclick="parseImport()" id="parse-btn">✦ Parse with AI</button>
+          <span id="parse-status" style="font-size:0.65rem;letter-spacing:0.1em;color:var(--text-dim)"></span>
+        </div>
+      </div>
+      <div id="import-preview" style="display:none">
+        <div style="font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:0.75rem">Step 2 — Review and confirm</div>
+        <div class="table-wrap" style="margin-bottom:1rem">
+          <table><thead><tr><th><input type="checkbox" id="select-all-import" onchange="toggleAllImport(this.checked)" style="accent-color:var(--gold)"></th><th>Brand</th><th>Line</th><th>Vitola</th><th>Qty</th><th>Price</th><th>Humidor</th></tr></thead>
+          <tbody id="import-tbody"></tbody></table>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center">
+          <button class="btn btn-gold" onclick="confirmImport()" id="import-btn">Import Selected Cigars</button>
+          <span id="import-status" style="font-size:0.65rem;letter-spacing:0.1em;color:var(--text-dim)"></span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1285,6 +1317,113 @@ function showToast(msg, isError) {
 // Close modals on overlay click
 document.getElementById('cigar-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeCigarModal(); });
 document.getElementById('humidor-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeHumidorModal(); });
+
+
+// ─── IMPORT ───
+let parsedCigars = [];
+
+async function parseImport() {
+  const raw = document.getElementById('import-raw').value.trim();
+  if (!raw) { showToast('Paste some invoice text first', true); return; }
+
+  const btn = document.getElementById('parse-btn');
+  const status = document.getElementById('parse-status');
+  btn.disabled = true;
+  btn.textContent = '◌ Parsing...';
+  status.textContent = '';
+
+  try {
+    const response = await fetch('/api/parse-invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: raw })
+    });
+
+    if (!response.ok) throw new Error('Server error: ' + response.status);
+    const data = await response.json();
+
+    if (!data.cigars || data.cigars.length === 0) {
+      showToast('No cigars found — try pasting more detail', true);
+      return;
+    }
+
+    parsedCigars = data.cigars;
+    renderImportPreview();
+    document.getElementById('import-preview').style.display = 'block';
+    status.textContent = `Found ${parsedCigars.length} cigar${parsedCigars.length > 1 ? 's' : ''}`;
+
+  } catch (err) {
+    showToast('Parse failed: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ Parse with AI';
+  }
+}
+
+function renderImportPreview() {
+  const tbody = document.getElementById('import-tbody');
+  const humidorOptions = humidors.map(h => `<option value="${h.id}">${esc(h.name)}</option>`).join('');
+
+  tbody.innerHTML = parsedCigars.map((c, i) => `
+    <tr>
+      <td><input type="checkbox" class="import-check" data-index="${i}" checked style="accent-color:var(--gold)"></td>
+      <td><input type="text" value="${esc(c.brand||'')}" onchange="parsedCigars[${i}].brand=this.value" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;width:120px;outline:none"></td>
+      <td><input type="text" value="${esc(c.line||'')}" onchange="parsedCigars[${i}].line=this.value" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;width:120px;outline:none"></td>
+      <td><input type="text" value="${esc(c.vitola||'')}" onchange="parsedCigars[${i}].vitola=this.value" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;width:100px;outline:none"></td>
+      <td><input type="number" value="${c.quantity||1}" onchange="parsedCigars[${i}].quantity=parseInt(this.value)||1" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;width:60px;outline:none"></td>
+      <td><input type="number" value="${c.purchase_price||''}" onchange="parsedCigars[${i}].purchase_price=parseFloat(this.value)||null" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;width:80px;outline:none" placeholder="0.00"></td>
+      <td><select onchange="parsedCigars[${i}].humidor_id=this.value" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:Josefin Sans,sans-serif;font-size:0.72rem;padding:0.3rem 0.5rem;outline:none">
+        <option value="">— None —</option>${humidorOptions}
+      </select></td>
+    </tr>`).join('');
+
+  document.getElementById('select-all-import').checked = true;
+}
+
+function toggleAllImport(checked) {
+  document.querySelectorAll('.import-check').forEach(cb => cb.checked = checked);
+}
+
+async function confirmImport() {
+  const checked = [...document.querySelectorAll('.import-check:checked')].map(cb => parseInt(cb.dataset.index));
+  const toImport = checked.map(i => parsedCigars[i]).filter(c => c.brand);
+
+  if (toImport.length === 0) { showToast('No cigars selected', true); return; }
+
+  const btn = document.getElementById('import-btn');
+  const status = document.getElementById('import-status');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  const { error } = await sb.from('cigars').insert(toImport.map(c => ({
+    brand: c.brand || null,
+    line: c.line || null,
+    vitola: c.vitola || null,
+    quantity: c.quantity || 1,
+    purchase_price: c.purchase_price || null,
+    purchase_date: c.purchase_date || null,
+    humidor_id: c.humidor_id || null,
+    wrapper_origin: c.wrapper_origin || null,
+    wrapper_type: c.wrapper_type || null,
+    binder_origin: c.binder_origin || null,
+    filler_origin: c.filler_origin || null,
+    strength: c.strength || null,
+    tasting_notes: c.tasting_notes || null,
+  })));
+
+  if (error) { showToast('Import failed: ' + error.message, true); btn.disabled = false; btn.textContent = 'Import Selected Cigars'; return; }
+
+  showToast(`Imported ${toImport.length} cigars!`);
+  status.textContent = `✓ ${toImport.length} cigars added`;
+  document.getElementById('import-raw').value = '';
+  document.getElementById('import-preview').style.display = 'none';
+  parsedCigars = [];
+  await loadCigars();
+  renderDashboard();
+
+  btn.disabled = false;
+  btn.textContent = 'Import Selected Cigars';
+}
 
 init();
 </script>
