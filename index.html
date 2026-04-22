@@ -1041,7 +1041,7 @@ function renderCigarTable(data) {
     const drinkBy = c.drink_by_date ? new Date(c.drink_by_date).toLocaleDateString('en-US', {month:'short',year:'numeric'}) : '—';
     const wrapperDisplay = [c.wrapper_type, c.wrapper_origin].filter(Boolean).join(' / ') || '—';
     return `
-    <tr ondblclick="openCigarModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+    <tr ondblclick="openCigarModal(cigars.find(x=>x.id==='${c.id}'))">
       <td>
         <div class="cigar-brand">${esc(c.brand)}</div>
         ${c.line ? `<div class="cigar-line">${esc(c.line)}</div>` : ''}
@@ -1054,7 +1054,7 @@ function renderCigarTable(data) {
       <td><span class="price-display">${c.purchase_price ? '$' + Number(c.purchase_price).toFixed(2) : '—'}</span></td>
       <td>${rating ? `<span class="${ratingClass} rating-pill">${rating}</span>` : '—'}</td>
       <td style="font-size:0.7rem;color:var(--text-dim)">${drinkBy}</td>
-      <td><button class="btn btn-outline btn-sm" onclick="openCigarModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">Edit</button></td>
+      <td style="display:flex;gap:0.4rem"><button class="btn btn-outline btn-sm" onclick="openCigarModal(cigars.find(x=>x.id==='${c.id}'))">Edit</button> <button class="btn btn-outline btn-sm" onclick="duplicateCigar(cigars.find(x=>x.id==='${c.id}'))" title="Duplicate">⧉</button></td>
     </tr>`;
   }).join('');
 }
@@ -1318,6 +1318,36 @@ function showToast(msg, isError) {
 document.getElementById('cigar-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeCigarModal(); });
 document.getElementById('humidor-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeHumidorModal(); });
 
+
+
+// ─── DUPLICATE CIGAR ───
+async function duplicateCigar(cigar) {
+  const copy = {
+    brand: cigar.brand,
+    line: cigar.line,
+    vitola: cigar.vitola,
+    humidor_id: cigar.humidor_id,
+    wrapper_origin: cigar.wrapper_origin,
+    wrapper_type: cigar.wrapper_type,
+    binder_origin: cigar.binder_origin,
+    filler_origin: cigar.filler_origin,
+    strength: cigar.strength,
+    quantity: cigar.quantity,
+    purchase_price: cigar.purchase_price,
+    purchase_date: cigar.purchase_date,
+    drink_by_date: cigar.drink_by_date,
+    rating: cigar.rating,
+    tasting_notes: cigar.tasting_notes,
+  };
+
+  const { error } = await sb.from('cigars').insert(copy);
+  if (error) { showToast('Duplicate failed: ' + error.message, true); return; }
+
+  showToast('Cigar duplicated — edit to make changes');
+  await loadCigars();
+  renderDashboard();
+  filterCigars();
+}
 
 // ─── IMPORT ───
 let parsedCigars = [];
