@@ -672,7 +672,7 @@
             <th>Qty</th>
             <th>Price</th>
             <th>Rating</th>
-            <th>Drink By</th>
+            <th>Age</th>
             <th></th>
           </tr>
         </thead>
@@ -1053,7 +1053,7 @@ function renderCigarTable(data) {
       <td><span class="qty-display">${c.quantity || 0}</span></td>
       <td><span class="price-display">${c.purchase_price ? '$' + Number(c.purchase_price).toFixed(2) : '—'}</span></td>
       <td>${rating ? `<span class="${ratingClass} rating-pill">${rating}</span>` : '—'}</td>
-      <td style="font-size:0.7rem;color:var(--text-dim)">${drinkBy}</td>
+      <td style="font-size:0.7rem;color:var(--gold-light)">${calcAge(c.purchase_date)}</td>
       <td style="display:flex;gap:0.4rem"><button class="btn btn-outline btn-sm" onclick="openCigarModal(cigars.find(x=>x.id==='${c.id}'))">Edit</button> <button class="btn btn-outline btn-sm" onclick="duplicateCigar(cigars.find(x=>x.id==='${c.id}'))" title="Duplicate">⧉</button></td>
     </tr>`;
   }).join('');
@@ -1319,6 +1319,26 @@ document.getElementById('cigar-modal').addEventListener('click', e => { if(e.tar
 document.getElementById('humidor-modal').addEventListener('click', e => { if(e.target === e.currentTarget) closeHumidorModal(); });
 
 
+
+
+// ─── AGE CALCULATOR ───
+function calcAge(purchaseDate) {
+  if (!purchaseDate) return '—';
+  const start = new Date(purchaseDate);
+  const now = new Date();
+  const diffMs = now - start;
+  if (diffMs < 0) return '—';
+
+  const days = Math.floor(diffMs / 86400000);
+  const months = Math.floor(days / 30.44);
+  const years = Math.floor(days / 365.25);
+  const remMonths = Math.floor((days % 365.25) / 30.44);
+
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${months}mo`;
+  if (remMonths === 0) return `${years}yr`;
+  return `${years}yr ${remMonths}mo`;
+}
 
 // ─── DUPLICATE CIGAR ───
 async function duplicateCigar(cigar) {
